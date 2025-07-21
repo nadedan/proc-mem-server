@@ -6,13 +6,13 @@ typedef struct InnerStruct {
     double inner_double;
 } InnerStruct_t;
 
-struct OuterStruct {
+typedef struct OuterStruct {
     int outer_int;
     char outer_char;
     InnerStruct_t inner;
 } OuterStruct_t;
 
-struct OuterStruct global_struct = {
+OuterStruct_t global_struct = {
     .outer_int = 42,
     .outer_char = 'A',
     .inner = {

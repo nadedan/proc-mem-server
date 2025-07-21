@@ -32,12 +32,14 @@ func ShowMembers(fileName string) {
 			break
 		}
 
-		if entry.Tag != dwarf.TagVariable {
+		name, _ := entry.Val(dwarf.AttrName).(string)
+		if name == "" {
 			continue
 		}
 
-		name, _ := entry.Val(dwarf.AttrName).(string)
-		if name == "" {
+		fmt.Printf("name: %s\n", name)
+		fmt.Printf("entry.Tag: %T %+v\n", entry.Tag, entry.Tag)
+		if entry.Tag != dwarf.TagVariable {
 			continue
 		}
 
@@ -51,9 +53,16 @@ func ShowMembers(fileName string) {
 			continue
 		}
 
+		fmt.Printf("typEntry: %T %+v\n", typEntry, typEntry.(*dwarf.TypedefType).Type)
+
 		structType, ok := typEntry.(*dwarf.StructType)
 		if !ok {
-			continue
+			typedefType, ok := typEntry.(*dwarf.TypedefType)
+			if !ok {
+				continue
+			}
+			structType = typedefType.Type.(*dwarf.StructType)
+			fmt.Printf("structType: %+v\n", structType)
 		}
 
 		pathPrefix := name
