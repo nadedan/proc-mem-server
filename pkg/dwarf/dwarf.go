@@ -39,21 +39,31 @@ func ShowMembers(fileName string) {
 
 		fmt.Printf("name: %s\n", name)
 		fmt.Printf("entry.Tag: %T %+v\n", entry.Tag, entry.Tag)
-		if entry.Tag != dwarf.TagVariable {
+		if entry.Tag != dwarf.TagVariable && entry.Tag != dwarf.TagStructType {
+			fmt.Printf("not TagVariable\n")
 			continue
 		}
 
-		typOff, ok := entry.Val(dwarf.AttrType).(dwarf.Offset)
-		if !ok {
-			continue
+		var typeOffset dwarf.Offset
+		var ok bool
+		switch entry.Tag {
+		case dwarf.TagVariable:
+			typeOffset, ok = entry.Val(dwarf.AttrType).(dwarf.Offset)
+			if !ok {
+				fmt.Printf("no dwarf.Offset\n")
+				continue
+			}
+		case dwarf.TagStructType:
+			typeOffset = entry.Offset
 		}
 
-		typEntry, err := dwarfData.Type(typOff)
+		typEntry, err := dwarfData.Type(typeOffset)
 		if err != nil {
+			fmt.Printf("could not get typEntry\n")
 			continue
 		}
 
-		fmt.Printf("typEntry: %T %+v\n", typEntry, typEntry.(*dwarf.TypedefType).Type)
+		//fmt.Printf("typEntry: %T %+v\n", typEntry, typEntry.(*dwarf.TypedefType).Type)
 
 		structType, ok := typEntry.(*dwarf.StructType)
 		if !ok {
