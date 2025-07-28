@@ -10,9 +10,79 @@ type Member struct {
 	Path   string
 	Offset uint64
 	Size   uint64
+	Type   dwarf.Type
+}
+
+func ShowStructTypedefs(fileName string) {
+
+	file, err := elf.Open(fileName)
+	if err != nil {
+		panic(err)
+	}
+
+	dwarfData, err := file.DWARF()
+	if err != nil {
+		panic(err)
+	}
+
+	tds := structTypedefs(dwarfData)
+	for name, td := range tds {
+		fmt.Printf("typedef: %s\n", name)
+		structType := td.Type.(*dwarf.StructType)
+		for _, field := range structType.Field {
+			if field.Type == nil {
+				continue
+			}
+			fmt.Printf("  field: %s\n", field.Name)
+			fmt.Printf("    type  : %s\n", field.Type)
+			fmt.Printf("    offset: %d\n", field.ByteOffset)
+			fmt.Printf("    size  : %d\n", field.Type.Size())
+		}
+	}
+
+}
+
+func structTypedefs(dwarfData *dwarf.Data) map[string]*dwarf.TypedefType {
+	m := make(map[string]*dwarf.TypedefType)
+
+	reader := dwarfData.Reader()
+	for {
+		entry, err := reader.Next()
+		if entry == nil || err != nil {
+			break
+		}
+
+		name, _ := entry.Val(dwarf.AttrName).(string)
+		if name == "" {
+			continue
+		}
+
+		if entry.Tag != dwarf.TagTypedef {
+			continue
+		}
+
+		typEntry, err := dwarfData.Type(entry.Offset)
+		if err != nil {
+			continue
+		}
+
+		typedefType, ok := typEntry.(*dwarf.TypedefType)
+		if !ok {
+			continue
+		}
+		_, ok = typedefType.Type.(*dwarf.StructType)
+		if !ok {
+			continue
+		}
+
+		m[typedefType.Name] = typedefType
+	}
+
+	return m
 }
 
 func ShowMembers(fileName string) {
+
 	file, err := elf.Open(fileName)
 	if err != nil {
 		panic(err)
@@ -63,16 +133,15 @@ func ShowMembers(fileName string) {
 			continue
 		}
 
-		//fmt.Printf("typEntry: %T %+v\n", typEntry, typEntry.(*dwarf.TypedefType).Type)
-
 		structType, ok := typEntry.(*dwarf.StructType)
 		if !ok {
 			typedefType, ok := typEntry.(*dwarf.TypedefType)
 			if !ok {
 				continue
 			}
+			fmt.Printf("<<<<typedefType: %+v\n", typedefType)
 			structType = typedefType.Type.(*dwarf.StructType)
-			fmt.Printf("structType: %+v\n", structType)
+			fmt.Printf(">>>>structType: %+v\n", structType)
 		}
 
 		pathPrefix := name
@@ -81,7 +150,7 @@ func ShowMembers(fileName string) {
 	}
 
 	for _, info := range results {
-		fmt.Printf("Member: %s, Offset: %d, Size: %d\n", info.Path, info.Offset, info.Size)
+		fmt.Printf("Member: %s, Type: %s, Offset: %d, Size: %d\n", info.Path, info.Type, info.Offset, info.Size)
 	}
 }
 
@@ -97,6 +166,7 @@ func collectStructMembers(dwarfData *dwarf.Data, structType *dwarf.StructType, p
 			Path:   fieldPath,
 			Offset: uint64(field.ByteOffset),
 			Size:   uint64(field.Type.Size()),
+			Type:   field.Type,
 		}
 		members = append(members, member)
 
