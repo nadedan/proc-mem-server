@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-type Member struct {
-	Path   string
+type StructField struct {
+	Name   string
 	Offset uint64
 	Size   uint64
 	Type   dwarf.Type
@@ -42,7 +42,9 @@ func ShowStructTypedefs(fileName string) {
 
 }
 
-func structTypedefs(dwarfData *dwarf.Data) map[string]*dwarf.TypedefType {
+type StructDefs map[string]*dwarf.TypedefType
+
+func structTypedefs(dwarfData *dwarf.Data) StructDefs {
 	m := make(map[string]*dwarf.TypedefType)
 
 	reader := dwarfData.Reader()
@@ -81,7 +83,7 @@ func structTypedefs(dwarfData *dwarf.Data) map[string]*dwarf.TypedefType {
 	return m
 }
 
-func ShowMembers(fileName string) {
+func ShowGlobals(fileName string) {
 
 	file, err := elf.Open(fileName)
 	if err != nil {
@@ -93,8 +95,10 @@ func ShowMembers(fileName string) {
 		panic(err)
 	}
 
+	structs := structTypedefs(dwarfData)
+
 	reader := dwarfData.Reader()
-	results := []Member{}
+	results := []StructField{}
 
 	for {
 		entry, err := reader.Next()
@@ -107,24 +111,13 @@ func ShowMembers(fileName string) {
 			continue
 		}
 
-		fmt.Printf("name: %s\n", name)
-		fmt.Printf("entry.Tag: %T %+v\n", entry.Tag, entry.Tag)
-		if entry.Tag != dwarf.TagVariable && entry.Tag != dwarf.TagStructType {
-			fmt.Printf("not TagVariable\n")
+		if entry.Tag != dwarf.TagVariable {
 			continue
 		}
 
-		var typeOffset dwarf.Offset
-		var ok bool
-		switch entry.Tag {
-		case dwarf.TagVariable:
-			typeOffset, ok = entry.Val(dwarf.AttrType).(dwarf.Offset)
-			if !ok {
-				fmt.Printf("no dwarf.Offset\n")
-				continue
-			}
-		case dwarf.TagStructType:
-			typeOffset = entry.Offset
+		typeOffset, ok := entry.Val(dwarf.AttrType).(dwarf.Offset)
+		if !ok {
+			continue
 		}
 
 		typEntry, err := dwarfData.Type(typeOffset)
@@ -139,41 +132,44 @@ func ShowMembers(fileName string) {
 			if !ok {
 				continue
 			}
-			fmt.Printf("<<<<typedefType: %+v\n", typedefType)
 			structType = typedefType.Type.(*dwarf.StructType)
-			fmt.Printf(">>>>structType: %+v\n", structType)
 		}
 
-		pathPrefix := name
-		members := collectStructMembers(dwarfData, structType, pathPrefix)
+		members := collectStructMembers(structType, name, 0, structs)
 		results = append(results, members...)
 	}
 
 	for _, info := range results {
-		fmt.Printf("Member: %s, Type: %s, Offset: %d, Size: %d\n", info.Path, info.Type, info.Offset, info.Size)
+		fmt.Printf("Member: %s, Type: %s, Offset: %d, Size: %d\n", info.Name, info.Type, info.Offset, info.Size)
 	}
 }
 
-func collectStructMembers(dwarfData *dwarf.Data, structType *dwarf.StructType, pathPrefix string) []Member {
-	members := []Member{}
+func collectStructMembers(structType *dwarf.StructType, path string, offset uint64, structs StructDefs) []StructField {
+	members := []StructField{}
 
 	for _, field := range structType.Field {
 		if field.Type == nil {
 			continue
 		}
-		fieldPath := pathPrefix + "." + field.Name
-		member := Member{
-			Path:   fieldPath,
-			Offset: uint64(field.ByteOffset),
+		member := StructField{
+			Name:   path + "." + field.Name,
+			Offset: offset + uint64(field.ByteOffset),
 			Size:   uint64(field.Type.Size()),
 			Type:   field.Type,
 		}
-		members = append(members, member)
-
-		if subStruct, ok := field.Type.(*dwarf.StructType); ok {
-			subMembers := collectStructMembers(dwarfData, subStruct, fieldPath)
-			members = append(members, subMembers...)
+		_, isSubStruct := structs[field.Type.Common().Name]
+		if !isSubStruct {
+			members = append(members, member)
+			continue
 		}
+		members = append(members,
+			collectStructMembers(
+				field.Type.(*dwarf.TypedefType).Type.(*dwarf.StructType),
+				path+"."+field.Name,
+				offset+uint64(field.ByteOffset),
+				structs,
+			)...,
+		)
 	}
 	return members
 }

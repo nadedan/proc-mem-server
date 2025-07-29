@@ -9,7 +9,7 @@ func main() {
 	elfPath := flag.String("f", "", "elf path")
 	flag.Parse()
 
-	//dwarf.ShowMembers(*elfPath)
-	dwarf.ShowStructTypedefs(*elfPath)
+	dwarf.ShowGlobals(*elfPath)
+	//dwarf.ShowStructTypedefs(*elfPath)
 
 }
