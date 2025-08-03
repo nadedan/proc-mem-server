@@ -26,7 +26,7 @@ func NewMmap(binName string) (*Mmap, error) {
 
 	output, err := exec.Command("pidof", binName).Output()
 	if err != nil {
-		return nil, fmt.Errorf("could not get the pid of %s, perhaps it is not running: %w", err)
+		return nil, fmt.Errorf("could not get the pid of %s, perhaps it is not running: %w", binName, err)
 	}
 	pidStr := string(output)
 	pidStr = strings.TrimRight(pidStr, "\n")
@@ -51,7 +51,7 @@ func NewMmap(binName string) (*Mmap, error) {
 	m.size = m.addrs.rwEnd - m.addrs.rwStart
 
 	memPath := fmt.Sprintf("/proc/%d/mem", m.pid)
-	m.fdProcMem, err = syscall.Open(memPath, syscall.O_RDWR, 0)
+	m.fdProcMem, err = syscall.Open(memPath, syscall.O_RDONLY, 0)
 	if err != nil {
 		return nil, fmt.Errorf("could not open process memory file: %w", err)
 	}
