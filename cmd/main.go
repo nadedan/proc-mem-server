@@ -1,7 +1,7 @@
 package main
 
 import (
-	"dwarfserver/pkg/dwarf"
+	"dwarfserver/pkg/procio"
 	"flag"
 )
 
@@ -9,7 +9,7 @@ func main() {
 	elfPath := flag.String("f", "", "elf path")
 	flag.Parse()
 
-	dwarf.ShowGlobals(*elfPath)
+	procio.ShowGlobals(*elfPath)
 	//dwarf.ShowStructTypedefs(*elfPath)
 
 }

@@ -1,4 +1,4 @@
-package dwarf
+package procio
 
 import (
 	"debug/dwarf"
