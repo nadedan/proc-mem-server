@@ -21,6 +21,8 @@ OuterStruct_t global_struct = {
     }
 };
 
+OuterStruct_t global_struct2;
+
 int main() {
     printf("Global struct address: %p\n", &global_struct);
     printf("PID: %d\n", getpid());
