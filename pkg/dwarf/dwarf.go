@@ -191,8 +191,10 @@ func collectStructMembers(structType *dwarf.StructType, path string, offset uint
 	return members
 }
 
+type GlobalVariables map[string]GlobalVariable
+
 // globalVariables extracts global variables from an ELF file.
-func globalVariables(f *elf.File) ([]GlobalVariable, error) {
+func globalVariables(f *elf.File) (GlobalVariables, error) {
 	// Get the symbol table (try .symtab first, fall back to .dynsym).
 	syms, err := f.Symbols()
 	if err != nil {
@@ -206,7 +208,7 @@ func globalVariables(f *elf.File) ([]GlobalVariable, error) {
 	// Get section headers to map symbol section indices to section names.
 	sections := f.Sections
 
-	var globalVars []GlobalVariable
+	globalVars := GlobalVariables{}
 
 	// Iterate through symbols.
 	for _, sym := range syms {
@@ -234,15 +236,41 @@ func globalVariables(f *elf.File) ([]GlobalVariable, error) {
 
 		// Only include variables in .data or .bss sections.
 		if sectionName == ".data" || sectionName == ".bss" {
-			globalVars = append(globalVars, GlobalVariable{
+			globalVars[sym.Name] = GlobalVariable{
 				Name:        sym.Name,
 				Address:     sym.Value,
 				Size:        sym.Size,
 				Section:     sectionName,
 				SectionAddr: sections[sectionIdx].Addr,
-			})
+			}
 		}
 	}
 
 	return globalVars, nil
+}
+
+type Sections map[string]Section
+type Section struct {
+	Addr uint64
+	Size uint64
+}
+
+func requiredSections(globals []GlobalVariable) Sections {
+	s := Sections{}
+
+	for _, global := range globals {
+		thisSection, exists := s[global.Section]
+		if !exists {
+			thisSection = Section{Addr: global.SectionAddr}
+		}
+		endAddr := global.Address + global.Size
+
+		if endAddr > thisSection.Size {
+			thisSection.Size = endAddr
+		}
+
+		s[global.Section] = thisSection
+	}
+
+	return s
 }
