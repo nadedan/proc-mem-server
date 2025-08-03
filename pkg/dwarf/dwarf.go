@@ -13,6 +13,15 @@ type StructField struct {
 	Type   dwarf.Type
 }
 
+// GlobalVariable represents a global variable's name, address, and section.
+type GlobalVariable struct {
+	Name        string
+	Address     uint64
+	Size        uint64
+	Section     string
+	SectionAddr uint64
+}
+
 func ShowStructTypedefs(fileName string) {
 
 	file, err := elf.Open(fileName)
@@ -142,6 +151,14 @@ func ShowGlobals(fileName string) {
 	for _, info := range results {
 		fmt.Printf("Member: %s, Type: %s, Offset: %d, Size: %d\n", info.Name, info.Type, info.Offset, info.Size)
 	}
+
+	gvs, err := globalVariables(file)
+	if err != nil {
+		panic(err)
+	}
+	for _, gv := range gvs {
+		fmt.Printf("Name: %s, Addr: 0x%X, Size: %d, SectionAddr: 0x%X\n", gv.Name, gv.Address, gv.Size, gv.SectionAddr)
+	}
 }
 
 func collectStructMembers(structType *dwarf.StructType, path string, offset uint64, structs StructDefs) []StructField {
@@ -172,4 +189,60 @@ func collectStructMembers(structType *dwarf.StructType, path string, offset uint
 		)
 	}
 	return members
+}
+
+// globalVariables extracts global variables from an ELF file.
+func globalVariables(f *elf.File) ([]GlobalVariable, error) {
+	// Get the symbol table (try .symtab first, fall back to .dynsym).
+	syms, err := f.Symbols()
+	if err != nil {
+		// If .symtab is not found, try .dynsym.
+		syms, err = f.DynamicSymbols()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read symbol table: %w", err)
+		}
+	}
+
+	// Get section headers to map symbol section indices to section names.
+	sections := f.Sections
+
+	var globalVars []GlobalVariable
+
+	// Iterate through symbols.
+	for _, sym := range syms {
+		// Filter for global variables:
+		// - Type: STT_OBJECT (variables)
+		// - Binding: STB_GLOBAL (global scope)
+		if elf.ST_TYPE(sym.Info) != elf.STT_OBJECT {
+			continue
+		}
+		if elf.ST_BIND(sym.Info) != elf.STB_GLOBAL {
+			continue
+		}
+		if sym.Name[0:2] == "__" {
+			continue
+		}
+
+		// Get the section index.
+		sectionIdx := sym.Section
+		sectionName := "unknown"
+
+		// Map section index to section name.
+		if sectionIdx < elf.SHN_LORESERVE && int(sectionIdx) < len(sections) {
+			sectionName = sections[sectionIdx].Name
+		}
+
+		// Only include variables in .data or .bss sections.
+		if sectionName == ".data" || sectionName == ".bss" {
+			globalVars = append(globalVars, GlobalVariable{
+				Name:        sym.Name,
+				Address:     sym.Value,
+				Size:        sym.Size,
+				Section:     sectionName,
+				SectionAddr: sections[sectionIdx].Addr,
+			})
+		}
+	}
+
+	return globalVars, nil
 }
