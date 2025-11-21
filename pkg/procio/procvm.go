@@ -19,12 +19,15 @@ type ProcVm struct {
 func NewProcVm(binName string) (*ProcVm, error) {
 	p := &ProcVm{}
 
+	fmt.Printf("hello\n")
 	output, err := exec.Command("pidof", binName).Output()
 	if err != nil {
 		return nil, fmt.Errorf("could not get the pid of %s, perhaps it is not running: %w", binName, err)
 	}
 	pidStr := string(output)
 	pidStr = strings.TrimRight(pidStr, "\n")
+
+	fmt.Printf("Got pid %s\n", pidStr)
 
 	pid, err := strconv.ParseUint(pidStr, 10, 64)
 	if err != nil {
@@ -53,10 +56,6 @@ func NewProcVm(binName string) (*ProcVm, error) {
 func (p ProcVm) Read(addr uint64, buff []byte) (n int, err error) {
 
 	addr += uint64(p.addrs.base)
-	//addr -= uint64(p.addrs.rwStart)
-	//if len(buff) > int(p.size) {
-	//	panic(fmt.Sprintf("cannot get %d bytes from an mmap of size %d", len(buff), p.size))
-	//}
 
 	localIov := []unix.Iovec{
 		{Base: &buff[0], Len: uint64(len(buff))},
@@ -77,6 +76,8 @@ func (p ProcVm) Read(addr uint64, buff []byte) (n int, err error) {
 }
 
 func (p ProcVm) Write(addr uint64, buff []byte) (n int, err error) {
+
+	addr += uint64(p.addrs.base)
 
 	localIov := []unix.Iovec{
 		{Base: &buff[0], Len: uint64(len(buff))},
