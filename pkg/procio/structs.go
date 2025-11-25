@@ -52,20 +52,13 @@ func StructFields(f *elf.File) (structFields, error) {
 			continue
 		}
 
-		typEntry, err := dwarfData.Type(typeOffset)
+		typeEntry, err := dwarfData.Type(typeOffset)
 		if err != nil {
 			fmt.Printf("could not get typEntry\n")
 			continue
 		}
 
-		structType, ok := typEntry.(*dwarf.StructType)
-		if !ok {
-			typedefType, ok := typEntry.(*dwarf.TypedefType)
-			if !ok {
-				continue
-			}
-			structType = typedefType.Type.(*dwarf.StructType)
-		}
+		structType, ok := asStructType(typeEntry)
 
 		members := collectStructMembers(structType, name, name, 0)
 		for _, member := range members {
@@ -75,7 +68,7 @@ func StructFields(f *elf.File) (structFields, error) {
 	return fields, nil
 }
 
-// collectStructMembers is a recursive funciton that will traverse a stuct
+// collectStructMembers is a recursive funciton that will traverse a struct
 // and document all levels and fields
 func collectStructMembers(structType *dwarf.StructType, baseName string, path string, offset uint64) []structField {
 	members := []structField{}
@@ -85,7 +78,7 @@ func collectStructMembers(structType *dwarf.StructType, baseName string, path st
 			continue
 		}
 		newMembers := []structField{}
-		structType, isSubStruct := field.Type.(*dwarf.StructType)
+		structType, isSubStruct := asStructType(field.Type)
 		switch isSubStruct {
 		case true:
 			// drop down into next level of struct
@@ -109,4 +102,19 @@ func collectStructMembers(structType *dwarf.StructType, baseName string, path st
 		members = append(members, newMembers...)
 	}
 	return members
+}
+
+func asStructType(t dwarf.Type) (*dwarf.StructType, bool) {
+	structType, ok := t.(*dwarf.StructType)
+	if ok {
+		return structType, true
+	}
+	typedefType, ok := t.(*dwarf.TypedefType)
+	if !ok {
+		return nil, false
+	}
+
+	structType = typedefType.Type.(*dwarf.StructType)
+
+	return structType, true
 }
